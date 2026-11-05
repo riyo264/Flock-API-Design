@@ -46,6 +46,8 @@ curl -X 'GET' 'http://localhost:8000/api/v1/meters?status=Faulty' -H 'accept: ap
 Instead of querying the legacy portal on-the-fly per request, this API fetches the complete dataset during the server's startup (`lifespan`) event and stores it in memory. 
 * *Trade-off:* This increases the initial boot time of the API by a few seconds. 
 * *Benefit:* It completely shields the legacy system from being overwhelmed by programmatic traffic, allows for instant filtering/querying locally, and drops response times to milliseconds.
+* *Scale Threshold & Evolution:* Storing records in a single process dictionary and filtering via Python list comprehensions works effortlessly for hundreds or tens of thousands of records. This approach would begin to struggle around **100,000+ meters** (due to linear O(N) scan overhead and RAM duplication across multiple Uvicorn worker processes). At that scale, I would replace `db_cache` with **PostgreSQL (or SQLite)** using B-Tree indexes on `installStatus`, `make`, and `feederCode`, paired with **Redis** for shared cross-worker caching.
+* *Cache Staleness Strategy:* Because utility hardware and transformer hierarchies change infrequently, cache staleness can be governed by a **Time-To-Live (TTL)** threshold (e.g., 12 hours) refreshed via an asynchronous background polling task (`asyncio.create_task`) that hot-swaps `db_cache` without blocking incoming user requests.
 
 **2. State-ful HTTP Client**
 I utilized `httpx.AsyncClient` to maintain a persistent connection pool that automatically handles the `__Secure-better-auth.session_token` cookie across requests, separating authentication logic from data extraction logic.
