@@ -13,7 +13,15 @@ class LegacyPortalClient:
             "email": "operator@urja.local", 
             "password": "urja-ops-2026"
         }
-        response = await self.client.post("/login", json=payload)
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": self.base_url,
+            "Referer": f"{self.base_url}/login"
+        }
+
+        response = await self.client.post("/api/auth/sign-in/email", json=payload, headers=headers)
         response.raise_for_status()
 
 
@@ -74,7 +82,7 @@ class LegacyPortalClient:
             
             # Generate a fresh signature for this specific page request
             auth_headers = self.generate_signature(method, path, query, secret)
-            
+
             response = await self.client.get(
                 f"{path}?{query}",
                 headers={
