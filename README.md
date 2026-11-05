@@ -37,8 +37,8 @@ curl -X 'GET' 'http://localhost:8000/api/v1/meters?status=Faulty' -H 'accept: ap
 
 * `api/main.py`: The FastAPI application and clean routing layer.
 * `api/client.py`: The `LegacyPortalClient` that handles legacy session authentication and cryptographic request signing.
-* `PROTOCOL.md`: A detailed write-up of how the legacy portal works under the hood, including authentication and data shapes.
-* `openapi.json`: The standard OpenAPI 3.x specification for this clean wrapper.
+* **[PROTOCOL.md](https://github.com/riyo264/Flock-API-Design/blob/main/PROTOCOL.md)**: A detailed write-up of how the legacy portal works under the hood, including authentication and data shapes.
+* **[openapi.json](https://github.com/riyo264/Flock-API-Design/blob/main/openapi.json)**: The standard OpenAPI 3.x specification for this clean wrapper.
 
 ## Design Decisions & Architecture
 
