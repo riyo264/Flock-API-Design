@@ -1,6 +1,6 @@
-# Urja Meter Ops - Internal Protocol Discovery
+# Urja Meter Ops - Internal Protocol Investigation
 
-This document outlines the internal workings of the legacy Urja Meter Ops web portal, discovered via network traffic inspection. The portal operates as a client-side application that fetches JSON data from internal endpoints.
+This document records the internal workings of the legacy Urja Meter Ops web portal, discovered via network traffic inspection. The portal operates as a client-side application that fetches JSON data from internal endpoints.
 
 ## Authentication & Access
 The portal uses cookie-based authentication. 
@@ -10,21 +10,19 @@ When a user logs in, the server sets a session cookie named `__Secure-better-aut
 *   **Format Example:** `__Secure-better-auth.session_token=rN1Lr3gr...`
 *   **Security:** The `__Secure-` prefix indicates it requires a secure (HTTPS) connection.
 
-To build our API wrapper, we will need to programmatically submit the login credentials, capture this specific cookie from the `Set-Cookie` response header, and inject it into all downstream API requests.
-
 ## Discovered Endpoints
 
 All API endpoints appear to be nested under the `/portal/` base path.
 
 ### 1. Meter Search & Listing
 *   **Endpoint:** `GET /portal/meters/search`
-*   **Purpose:** Retrieves a paginated list of meters, optionally filtered by a search query.
+*   **Purpose:** Retrieves a list of meters, optionally filtered by a search query.
 *   **Query Parameters:**
     *   `q` (string): The search term. Can be empty (`q=`) for a default list.
     *   `page` (integer): The page number to fetch (e.g., `page=1`).
 
 **Response Shape:**
-The endpoint returns a JSON object containing pagination metadata and an array of meter objects.
+The endpoint returns a JSON object containing metadata and an array of meter objects.
 ```json
 {
   "data": [
@@ -42,11 +40,52 @@ The endpoint returns a JSON object containing pagination metadata and an array o
 }
 ```
 
-### 2. Other Observed Endpoints (Requires Further Inspection)
-Based on initial network traces, the following endpoints also exist and use the same pagination (`page=X`) scheme:
-*   `GET /portal/dts`: Likely fetches Distribution Transformer Station (network hierarchy) data.
-*   `GET /portal/export`: A bulk data path. Transfers significantly larger payloads (~232kB) than standard paginated requests.
-*   `GET /portal/keys`: A small metadata or configuration endpoint.
+### 2. Network Hierarchy (DTS)
+*   **Endpoint:** `GET /portal/dts`
+*   **Purpose:** Retrieves a list of Distribution Transformer Stations (DTS) to establish the electrical grid network hierarchy.
+*   **Query Parameters:**
+    *   `page` (integer): The page number to fetch (e.g., `page=1`).
+
+ **Response Shape:**
+```json
+{
+  "data": [
+    {
+      "code": "DT-001",
+      "name": "Malviya Nagar DT 1",
+      "feederCode": "F-001",
+      "capacityKva": 100
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "total": 40
+}
+```
+
+### 3. Bulk Data Export (Protected Path)
+The portal supports bulk data extraction via `/portal/export`, which transfers significantly larger payloads than standard page requests. However, this path is protected by a time-bound cryptographic signature to prevent unauthorized scraping.
+
+**Step 1: Obtain the Signing Secret**
+*   **Endpoint:** `GET /portal/keys`
+*   **Purpose:** A metadata endpoint that returns a temporary `signingSecret` required for authorizing the export payload.
+
+**Step 2: Generate the HMAC-SHA256 Signature**
+Before requesting the export data, the client must generate a 64-character hexadecimal signature. This is done by concatenating specific request variables separated by newline characters (`\n`):
+1. HTTP Method (`GET`)
+2. Path (`/portal/export`)
+3. Query String (`page=1`)
+4. Current Unix Timestamp in seconds (e.g., `1730799200`)
+
+This concatenated string is then hashed using HMAC-SHA256, utilizing the `signingSecret` as the cryptographic key.
+
+**Step 3: Execute the Request**
+*   **Endpoint:** `GET /portal/export?page=1`
+*   **Headers Required:**
+    *   `X-Timestamp`: The Unix timestamp generated in Step 2.
+    *   `X-Signature`: The generated HMAC-SHA256 hash.
+*   **Pagination:** A fresh timestamp and a newly calculated signature must be generated for every subsequent page request (e.g., `page=2`).
+
 
 ## Data Schema & Types
 
@@ -57,8 +96,8 @@ From the `/search` payload, we can infer the `Meter` entity schema:
 *   `phaseType` (String): Either "single" or "three".
 *   `installStatus` (String, Optional/Nullable): Indicates current status (e.g., "Installed", "Faulty"). 
 
-## Quirks & Surprises
-
-1.  **Sparse Data / Optional Fields:** In the `search` response, the `installStatus` field is completely missing from several objects (e.g., meters `J100000` and `J100003`). Our wrapper API must handle missing keys gracefully, either by mapping them to `null` or assigning a default "Unknown" value.
-2.  **Pagination Constants:** The system hardcodes a `pageSize` of 20 for the search endpoint. To fetch all 403 records without using the bulk `/export` path, a client would need to make 21 sequential requests.
-3.  **Path Routing:** The frontend application routes the user to `/meters`, but the background data fetch calls `/portal/meters/search`. It's important to differentiate the UI routes from the API routes when building the wrapper.
+From the `/dts` payload, we can infer the `Transformer` entity schema:
+*   `code` (String): The transformer identifier (e.g., "DT-001").
+*   `name` (String): The localized name of the transformer station.
+*   `feederCode` (String): The relational link to the upstream feeder (e.g., "F-001"), necessary for mapping the network hierarchy.
+*   `capacityKva` (Number): The capacity rating of the transformer.
