@@ -8,7 +8,7 @@ This service is fully containerized. You do not need to install Python or any de
 
 1. **Clone the repository:**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/riyo264/Flock-API-Design.git
    cd Flock-API-Design
    ```
 
