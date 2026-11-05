@@ -10,7 +10,7 @@ class Meter(BaseModel):
     serialNo: str
     make: str
     phaseType: str
-    installStatus: str = "Unknown" 
+    installStatus: Optional[str] = "Unknown"
 
 class Transformer(BaseModel):
     code: str
@@ -79,7 +79,7 @@ async def get_meters(status: Optional[str] = None):
         # Perform local filtering in memory
         meters = [
             m for m in meters 
-            if m.get("installStatus", "Unknown").lower() == status.lower()
+            if (m.get("installStatus") or "Unknown").lower() == status.lower()
         ]
         
     return meters
